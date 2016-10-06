@@ -18,7 +18,6 @@ package main
 import (
 	"io"
 
-	"github.com/gravitational/trace"
 	"golang.org/x/net/websocket"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/unicode"
@@ -103,7 +102,7 @@ func (w *WebSockWrapper) Read(out []byte) (n int, err error) {
 		}
 	}
 	if err != nil {
-		return 0, trace.Wrap(err)
+		return 0, err
 	}
 	return copy(out, data), nil
 }
