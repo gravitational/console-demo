@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Console demo</title>
+        <link rel="stylesheet" href="xterm.css" />
+        <link rel="stylesheet" href="style.css" />
+        <script src="xterm.js" ></script>
+        <script src="attach.js" ></script>
+        <script src="fit.js" ></script>
+    </head>
+    <body>
+        <div id="terminal-container"></div>
+        <script defer >
+                var term,
+                    protocol,
+                    socketURL,
+                    socket,
+                    charWidth,
+                    charHeight,
+                    cols,
+                    rows,
+                    szTimer,
+                    sessionStats;
+
+                var terminalContainer = document.getElementById('terminal-container');
+                createTerminal();
+
+                function createTerminal() {
+                  while (terminalContainer.children.length) {
+                    terminalContainer.removeChild(terminalContainer.children[0]);
+                  }
+                  term = new Terminal({
+                    cursorBlink: true,
+                    screenKeys: true,
+                    /* Initial terminal size to match the session originator's terminal */
+                    cols: 100,
+                    rows: 30,
+                  });
+                  protocol = (location.protocol === 'https:') ? 'wss://' : 'ws://';
+                  sessionId = location.pathname.split("/").pop()
+                  socketURL = protocol + location.hostname + ((location.port) ? (':' + location.port) : '') + 
+                    '/shell/' + sessionId + '?' + document.cookie;
+
+                  socket = new WebSocket(socketURL);
+
+                  term.open(terminalContainer);
+                  term.fit();
+
+                  socket.onopen  = runRealTerminal;
+                  socket.onclose = runRealTerminal;
+                  socket.onerror = runRealTerminal;
+
+                  var initialGeometry = term.proposeGeometry()
+                  cols = initialGeometry.cols;
+                  rows = initialGeometry.rows;
+
+                  charWidth = Math.ceil(term.element.offsetWidth / cols);
+                  charHeight = Math.ceil(term.element.offsetHeight / rows);
+
+                  //szTimer = window.setInterval(updateTerminalSize, 1000)
+                }
+
+                function runRealTerminal() {
+                  term.attach(socket);
+                  term._initialized = true;
+                  setTerminalSize(cols, rows);
+                }
+
+                function setTerminalSize (cols, rows) {
+                  var width = (cols * charWidth).toString() + 'px',
+                      height = (rows * charHeight).toString() + 'px';
+
+                  terminalContainer.style.width = width;
+                  terminalContainer.style.height = height;
+                  term.resize(cols, rows);
+                }
+
+                // gets called once a second to re-size the terminal to match it to
+                // the session originator's
+                function updateTerminalSize() {
+                    var req = new XMLHttpRequest();
+                    req.onreadystatechange = function() {
+                        if (req.readyState == XMLHttpRequest.DONE ) {
+                           if (req.status == 200) {
+                               newStats = JSON.parse(req.responseText);
+                               if (!newStats) {
+                                    return
+                               }
+                               if (!sessionStats || (sessionStats.term_width != newStats.term_width || 
+                                                   sessionStats.term_height != newStats.term_height)) {
+                                   setTerminalSize(newStats.term_width, newStats.term_height);
+                               }
+                               sessionStats = newStats
+                           }
+                           else {
+                               window.clearInterval(szTimer);
+                           }
+                        }
+                    };
+                    req.open("GET", "/api/sessions/{{.ID}}/stats", true);
+                    req.send();
+                }
+        </script>
+    </body>
+</html>
